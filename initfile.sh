@@ -12,20 +12,15 @@ echo "*.pyc" >> .gitignore
 echo ".DS_Store" >> .gitignore
 echo "config.json" >> .gitignore
 
+
 # Add all files to the repository
 git add .
 
 # Commit the changes with an initial commit message
 git commit -m "Initial commit: Project setup and planning files"
 
-# Navigate to the project's root directory (if you're not already there)
-cd /home/echeadle/15_DupFiles/find-dup-files/
+# Create a conda environment named 'dupfiles' with Python 3.11
+conda create -n dupfiles python=3.11 -y
 
-# Create a virtual environment named '.venv'
-python3 -m venv .venv
-
-# Activate the virtual environment (Linux/macOS)
-source .venv/bin/activate
-
-# Activate the virtual environment (Windows)
-# .venv\Scripts\activate
+# Activate the conda environment
+conda activate dupfiles
