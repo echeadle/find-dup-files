@@ -4,10 +4,10 @@
 - [x] Initialize Git repository
 - [x] Set up Python virtual environment
 - [x] Install FastAPI, Uvicorn, SQLite3 driver
-- [ ] Create initial project structure
+- [x] Create initial project structure
 
 ## Core Functionality
-- [ ] Define SQLite schema: `files (id, path, hash, size, mtime)`
+- [x] Define SQLite schema: `files (id, path, hash, size, mtime)`
 - [ ] Implement directory walker
 - [ ] Skip symlinks
 - [ ] Hash files using SHA-256
