@@ -2,10 +2,10 @@ import os
 import json
 import hashlib
 from pathlib import Path
-from app.core.scanner import walk_directory, hash_file, store_file_entry
+from app.core.scanner import walk_directory, hash_file, store_file_entry, find_duplicates
 from app.models.file_entry import FileEntry
 from app.core.db import create_db_engine, create_db_and_tables, get_db_session
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 import pytest
 
 
@@ -202,5 +202,85 @@ def test_store_file_entry_skip_rehash(tmp_path: Path):
     assert db_file_entry.hash == new_file_hash
     assert db_file_entry.size == new_file_size
     assert db_file_entry.mtime == new_file_mtime
+
+    session.close()
+
+
+def test_find_duplicates(tmp_path: Path):
+    """
+    Test that find_duplicates returns the correct groups of duplicate files.
+    """
+    db_file = tmp_path / "test.db"
+    engine = create_db_engine(str(db_file))
+    create_db_and_tables(engine)
+    session_generator = get_db_session(engine)
+    session = next(session_generator)
+
+    # Create some files with duplicate content
+    file1_path = tmp_path / "file1.txt"
+    file2_path = tmp_path / "file2.txt"
+    file3_path = tmp_path / "file3.txt"
+    file4_path = tmp_path / "file4.txt"
+
+    file1_content = b"This is the content of file 1."
+    file2_content = b"This is the content of file 2."
+    file3_content = b"This is the content of file 1."  # Duplicate of file1
+    file4_content = b"This is the content of file 1."  # Duplicate of file1
+
+    with open(file1_path, "wb") as f:
+        f.write(file1_content)
+    with open(file2_path, "wb") as f:
+        f.write(file2_content)
+    with open(file3_path, "wb") as f:
+        f.write(file3_content)
+    with open(file4_path, "wb") as f:
+        f.write(file4_content)
+
+    # Create file entries
+    file1_hash = hash_file(file1_path)
+    file2_hash = hash_file(file2_path)
+    file3_hash = hash_file(file3_path)
+    file4_hash = hash_file(file4_path)
+
+    file1_entry = FileEntry(
+        path=str(file1_path),
+        hash=file1_hash,
+        size=os.path.getsize(file1_path),
+        mtime=os.path.getmtime(file1_path),
+    )
+    file2_entry = FileEntry(
+        path=str(file2_path),
+        hash=file2_hash,
+        size=os.path.getsize(file2_path),
+        mtime=os.path.getmtime(file2_path),
+    )
+    file3_entry = FileEntry(
+        path=str(file3_path),
+        hash=file3_hash,
+        size=os.path.getsize(file3_path),
+        mtime=os.path.getmtime(file3_path),
+    )
+    file4_entry = FileEntry(
+        path=str(file4_path),
+        hash=file4_hash,
+        size=os.path.getsize(file4_path),
+        mtime=os.path.getmtime(file4_path),
+    )
+
+    # Store the file entries
+    store_file_entry(file1_entry, session)
+    store_file_entry(file2_entry, session)
+    store_file_entry(file3_entry, session)
+    store_file_entry(file4_entry, session)
+
+    # Find the duplicates
+    duplicate_groups = find_duplicates(session)
+
+    # Assert that the correct duplicate groups were found
+    assert len(duplicate_groups) == 1
+    assert len(duplicate_groups[0]) == 3
+    assert file1_entry in duplicate_groups[0]
+    assert file3_entry in duplicate_groups[0]
+    assert file4_entry in duplicate_groups[0]
 
     session.close()

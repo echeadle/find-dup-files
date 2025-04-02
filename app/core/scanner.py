@@ -1,9 +1,9 @@
 import os
 import json
 import hashlib
-from typing import Generator
+from typing import Generator, List, Dict
 from pathlib import Path
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from app.models.file_entry import FileEntry
 
 
@@ -108,3 +108,26 @@ def scan_directory(directory: str, session: Session, config_file: str = "config.
             mtime=os.path.getmtime(file_path),
         )
         store_file_entry(file_entry, session)
+
+
+def find_duplicates(session: Session) -> List[List[FileEntry]]:
+    """
+    Finds and returns groups of duplicate files based on their SHA-256 hash.
+
+    Args:
+        session: The database session.
+
+    Returns:
+        A list of lists, where each inner list contains FileEntry objects
+        that are duplicates of each other.
+    """
+    statement = select(FileEntry.hash).group_by(FileEntry.hash).having(func.count(FileEntry.hash) > 1)
+    duplicate_hashes = session.exec(statement).all()
+
+    duplicate_groups: List[List[FileEntry]] = []
+    for file_hash in duplicate_hashes:
+        statement = select(FileEntry).where(FileEntry.hash == file_hash)
+        duplicate_group = session.exec(statement).all()
+        duplicate_groups.append(duplicate_group)
+
+    return duplicate_groups

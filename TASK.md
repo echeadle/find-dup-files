@@ -13,7 +13,7 @@
 - [x] Hash files using SHA-256
 - [x] Store/update file entries in database
 - [x] Avoid re-hashing files with unchanged size+mtime
-- [ ] Detect duplicates by grouping hashes
+- [x] Detect duplicates by grouping hashes
 
 ## API Endpoints (FastAPI)
 - [ ] `POST /scan` - Trigger scan for specified path
