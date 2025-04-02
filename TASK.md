@@ -22,7 +22,7 @@
 
 ## Frontend (Simple Web Interface)
 - [x] Create minimal HTML/JS UI (served via FastAPI)
-- [ ] Form to enter directory path and trigger scan
+- [x] Form to enter directory path and trigger scan
 - [ ] Table to show duplicates grouped by hash
 - [ ] Show scan status and error messages
 

@@ -7,6 +7,41 @@
 </head>
 <body>
     <h1>Duplicate File Finder</h1>
-    <p>This is a minimal web interface for the Duplicate File Finder application.</p>
+
+    <form id="scanForm">
+        <label for="directory">Directory to Scan:</label>
+        <input type="text" id="directory" name="directory" required>
+        <button type="submit">Start Scan</button>
+    </form>
+
+    <script>
+        const form = document.getElementById('scanForm');
+        form.addEventListener('submit', (event) => {
+            event.preventDefault(); // Prevent default form submission
+
+            const directory = document.getElementById('directory').value;
+
+            fetch('/scan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ directory: directory })
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error('Scan failed.');
+                }
+            })
+            .then(data => {
+                alert(data.message); // Show success message
+            })
+            .catch(error => {
+                alert(error.message); // Show error message
+            });
+        });
+    </script>
 </body>
 </html>
