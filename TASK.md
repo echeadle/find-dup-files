@@ -16,7 +16,7 @@
 - [x] Detect duplicates by grouping hashes
 
 ## API Endpoints (FastAPI)
-- [ ] `POST /scan` - Trigger scan for specified path
+- [x] `POST /scan` - Trigger scan for specified path
 - [ ] `GET /files` - Return list of all scanned files
 - [ ] `GET /duplicates` - Return list of duplicate file groups
 
@@ -38,3 +38,4 @@
 ## Discovered During Work
 - [x] Upload repository to Git (GitHub, GitLab, etc.)
 - [x] Create config file to exclude directories
+- [ ] Create app/main.py file

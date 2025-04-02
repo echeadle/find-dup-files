@@ -18,6 +18,8 @@ def walk_directory(directory: str, config_file: str = "config.json") -> Generato
     Yields:
         Path: The path to each file found in the directory.
     """
+    if not os.path.exists(directory):
+        raise FileNotFoundError(f"Directory '{directory}' not found.")
     excluded_directories = []
     try:
         with open(config_file, "r") as f:
