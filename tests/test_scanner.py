@@ -1,7 +1,8 @@
 import os
 import json
+import hashlib
 from pathlib import Path
-from app.core.scanner import walk_directory
+from app.core.scanner import walk_directory, hash_file
 import pytest
 
 
@@ -85,3 +86,23 @@ def test_walk_directory_skip_config(tmp_path: Path):
     # Assert that only the non-excluded file was found
     assert len(found_paths) == 1
     assert tmp_path / "file1.txt" in found_paths
+
+
+def test_hash_file(tmp_path: Path):
+    """
+    Test that hash_file returns the correct SHA-256 hash of a file.
+    """
+    # Create a file with some content
+    file_path = tmp_path / "test_file.txt"
+    file_content = b"This is a test file."
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+
+    # Calculate the expected hash
+    expected_hash = hashlib.sha256(file_content).hexdigest()
+
+    # Calculate the actual hash
+    actual_hash = hash_file(file_path)
+
+    # Assert that the hashes match
+    assert actual_hash == expected_hash

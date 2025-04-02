@@ -8,10 +8,10 @@
 
 ## Core Functionality
 - [x] Define SQLite schema: `files (id, path, hash, size, mtime)`
-- [ ] Implement directory walker
-- [ ] Skip symlinks
-- [ ] Hash files using SHA-256
-- [ ] Store/update file entries in database
+- [x] Implement directory walker
+- [x] Skip symlinks
+- [x] Hash files using SHA-256
+- [x] Store/update file entries in database
 - [ ] Avoid re-hashing files with unchanged size+mtime
 - [ ] Detect duplicates by grouping hashes
 
@@ -36,4 +36,5 @@
 - [ ] Include OpenAPI docs via FastAPI
 
 ## Discovered During Work
-- [ ] Upload repository to Git (GitHub, GitLab, etc.)
+- [x] Upload repository to Git (GitHub, GitLab, etc.)
+- [x] Create config file to exclude directories
