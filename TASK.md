@@ -18,10 +18,10 @@
 ## API Endpoints (FastAPI)
 - [x] `POST /scan` - Trigger scan for specified path
 - [x] `GET /files` - Return list of all scanned files
-- [ ] `GET /duplicates` - Return list of duplicate file groups
+- [x] `GET /duplicates` - Return list of duplicate file groups
 
 ## Frontend (Simple Web Interface)
-- [ ] Create minimal HTML/JS UI (served via FastAPI)
+- [x] Create minimal HTML/JS UI (served via FastAPI)
 - [ ] Form to enter directory path and trigger scan
 - [ ] Table to show duplicates grouped by hash
 - [ ] Show scan status and error messages

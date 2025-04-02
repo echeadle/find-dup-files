@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from app.core.db import get_db_session
-from app.core.scanner import scan_directory
+from app.core.scanner import scan_directory, find_duplicates
 from app.models.file_entry import FileEntry
 from typing import List
 
@@ -48,3 +48,19 @@ def get_files(session: Session = Depends(get_db_session)):
     statement = select(FileEntry)
     files = session.exec(statement).all()
     return files
+
+
+@router.get("/duplicates", response_model=List[List[FileEntry]])
+def get_duplicates(session: Session = Depends(get_db_session)):
+    """
+    Returns a list of duplicate file groups.
+
+    Args:
+        session: The database session.
+
+    Returns:
+        A list of lists, where each inner list contains FileEntry objects
+        that are duplicates of each other.
+    """
+    duplicate_groups = find_duplicates(session)
+    return duplicate_groups
