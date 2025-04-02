@@ -2,7 +2,10 @@ import os
 import json
 import hashlib
 from pathlib import Path
-from app.core.scanner import walk_directory, hash_file
+from app.core.scanner import walk_directory, hash_file, store_file_entry
+from app.models.file_entry import FileEntry
+from app.core.db import create_db_engine, create_db_and_tables, get_db_session
+from sqlmodel import Session, select
 import pytest
 
 
@@ -106,3 +109,98 @@ def test_hash_file(tmp_path: Path):
 
     # Assert that the hashes match
     assert actual_hash == expected_hash
+
+
+def test_store_file_entry_skip_rehash(tmp_path: Path):
+    """
+    Test that store_file_entry skips re-hashing files with unchanged size+mtime.
+    """
+    db_file = tmp_path / "test.db"
+    engine = create_db_engine(str(db_file))
+    create_db_and_tables(engine)
+    session_generator = get_db_session(engine)
+    session = next(session_generator)
+
+    # Create a file with some content
+    file_path = tmp_path / "test_file.txt"
+    file_content = b"This is a test file."
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+
+    # Create a file entry
+    file_hash = hash_file(file_path)
+    file_size = os.path.getsize(file_path)
+    file_mtime = os.path.getmtime(file_path)
+    file_entry = FileEntry(
+        path=str(file_path),
+        hash=file_hash,
+        size=file_size,
+        mtime=file_mtime,
+    )
+
+    # Store the file entry
+    store_file_entry(file_entry, session)
+
+    # Retrieve the file entry from the database
+    statement = select(FileEntry).where(FileEntry.path == str(file_path))
+    db_file_entry = session.exec(statement).first()
+
+    # Assert that the file entry was stored correctly
+    assert db_file_entry is not None
+    assert db_file_entry.path == str(file_path)
+    assert db_file_entry.hash == file_hash
+    assert db_file_entry.size == file_size
+    assert db_file_entry.mtime == file_mtime
+
+    # Modify the file content
+    with open(file_path, "wb") as f:
+        f.write(b"This is modified content.")
+
+    # Create a new file entry with the same path, but different content
+    new_file_hash = hash_file(file_path)
+    new_file_size = os.path.getsize(file_path)
+    new_file_mtime = os.path.getmtime(file_path)
+    new_file_entry = FileEntry(
+        path=str(file_path),
+        hash=new_file_hash,
+        size=new_file_size,
+        mtime=new_file_mtime,
+    )
+
+    # Store the new file entry
+    store_file_entry(new_file_entry, session)
+
+    # Retrieve the file entry from the database again
+    statement = select(FileEntry).where(FileEntry.path == str(file_path))
+    db_file_entry = session.exec(statement).first()
+
+    # Assert that the file entry was updated
+    assert db_file_entry is not None
+    assert db_file_entry.path == str(file_path)
+    assert db_file_entry.hash == new_file_hash
+    assert db_file_entry.size == new_file_size
+    assert db_file_entry.mtime == new_file_mtime
+
+    # Create a new file entry with the same path, size, and mtime
+    new_file_entry = FileEntry(
+        path=str(file_path),
+        hash=new_file_hash,
+        size=new_file_size,
+        mtime=new_file_mtime,
+    )
+
+    # Store the new file entry
+    store_file_entry(new_file_entry, session)
+
+    # Retrieve the file entry from the database again
+    statement = select(FileEntry).where(FileEntry.path == str(file_path))
+    db_file_entry = session.exec(statement).first()
+
+    # Assert that the file entry was not updated
+    assert db_file_entry is not None
+    assert db_file_entry.path == str(file_path)
+    assert db_file_entry.hash == new_file_hash
+    assert db_file_entry.size == new_file_size
+    assert db_file_entry.mtime == new_file_mtime
+
+    session.close()

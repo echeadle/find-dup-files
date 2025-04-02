@@ -3,7 +3,7 @@ import json
 import hashlib
 from typing import Generator
 from pathlib import Path
-from sqlmodel import Session
+from sqlmodel import Session, select
 from app.models.file_entry import FileEntry
 
 
@@ -72,19 +72,20 @@ def store_file_entry(file_entry: FileEntry, session: Session):
         file_entry: The file entry to store or update.
         session: The database session.
     """
-    if file_entry.id:
-        db_file_entry = session.get(FileEntry, file_entry.id)
-        if db_file_entry:
+    statement = select(FileEntry).where(FileEntry.path == file_entry.path)
+    db_file_entry = session.exec(statement).first()
+    if db_file_entry:
+        # Check if size and mtime are the same
+        if db_file_entry.size == file_entry.size and db_file_entry.mtime == file_entry.mtime:
+            return  # Skip re-hashing and updating
+        else:
             # Update the existing file entry
-            db_file_entry.path = file_entry.path
             db_file_entry.hash = file_entry.hash
             db_file_entry.size = file_entry.size
             db_file_entry.mtime = file_entry.mtime
             session.add(db_file_entry)
-        else:
-            # Create a new file entry
-            session.add(file_entry)
     else:
+        # Create a new file entry
         session.add(file_entry)
     session.commit()
 
