@@ -1,0 +1,36 @@
+# Duplicate File Finder - TASKS
+
+## Initial Setup
+- [x] Initialize Git repository
+- [ ] Set up Python virtual environment
+- [ ] Install FastAPI, Uvicorn, SQLite3 driver
+- [ ] Create initial project structure
+
+## Core Functionality
+- [ ] Define SQLite schema: `files (id, path, hash, size, mtime)`
+- [ ] Implement directory walker
+- [ ] Skip symlinks
+- [ ] Hash files using SHA-256
+- [ ] Store/update file entries in database
+- [ ] Avoid re-hashing files with unchanged size+mtime
+- [ ] Detect duplicates by grouping hashes
+
+## API Endpoints (FastAPI)
+- [ ] `POST /scan` - Trigger scan for specified path
+- [ ] `GET /files` - Return list of all scanned files
+- [ ] `GET /duplicates` - Return list of duplicate file groups
+
+## Frontend (Simple Web Interface)
+- [ ] Create minimal HTML/JS UI (served via FastAPI)
+- [ ] Form to enter directory path and trigger scan
+- [ ] Table to show duplicates grouped by hash
+- [ ] Show scan status and error messages
+
+## Testing
+- [ ] Unit test for hash function and file scanner
+- [ ] Integration tests for API endpoints
+- [ ] Manual test for frontend scan & duplicate display
+
+## Documentation
+- [ ] README with setup + run instructions
+- [ ] Include OpenAPI docs via FastAPI
