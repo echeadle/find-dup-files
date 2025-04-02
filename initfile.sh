@@ -17,3 +17,15 @@ git add .
 
 # Commit the changes with an initial commit message
 git commit -m "Initial commit: Project setup and planning files"
+
+# Navigate to the project's root directory (if you're not already there)
+cd /home/echeadle/15_DupFiles/find-dup-files/
+
+# Create a virtual environment named '.venv'
+python3 -m venv .venv
+
+# Activate the virtual environment (Linux/macOS)
+source .venv/bin/activate
+
+# Activate the virtual environment (Windows)
+# .venv\Scripts\activate
