@@ -2,8 +2,8 @@
 
 ## Initial Setup
 - [x] Initialize Git repository
-- [ ] Set up Python virtual environment
-- [ ] Install FastAPI, Uvicorn, SQLite3 driver
+- [x] Set up Python virtual environment
+- [x] Install FastAPI, Uvicorn, SQLite3 driver
 - [ ] Create initial project structure
 
 ## Core Functionality
@@ -34,3 +34,6 @@
 ## Documentation
 - [ ] README with setup + run instructions
 - [ ] Include OpenAPI docs via FastAPI
+
+## Discovered During Work
+- [ ] Upload repository to Git (GitHub, GitLab, etc.)
