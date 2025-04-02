@@ -17,7 +17,7 @@
 
 ## API Endpoints (FastAPI)
 - [x] `POST /scan` - Trigger scan for specified path
-- [ ] `GET /files` - Return list of all scanned files
+- [x] `GET /files` - Return list of all scanned files
 - [ ] `GET /duplicates` - Return list of duplicate file groups
 
 ## Frontend (Simple Web Interface)
