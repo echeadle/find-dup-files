@@ -5,8 +5,6 @@ import pytest
 from app.core.db import create_db_engine, create_db_and_tables, get_db_session
 from pathlib import Path
 
-
-
 @pytest.fixture(name="session")
 def session_fixture(tmp_path: Path):
     db_file = tmp_path / "test.db"
@@ -41,3 +39,22 @@ def test_index_html_has_form(client: TestClient):
     assert "<form id=\"scanForm\">" in response.text
     assert "<input type=\"text\" id=\"directory\" name=\"directory\" required>" in response.text
     assert "<button type=\"submit\">Start Scan</button>" in response.text
+
+def test_index_html_has_duplicates_table(client: TestClient):
+    """
+    Test that the index.html file contains the duplicates table.
+    """
+    response = client.get("/static/index.html")
+    assert response.status_code == 200
+    assert "<table id=\"duplicatesTable\">" in response.text
+    assert "<th>Hash</th>" in response.text
+    assert "<th>File Path</th>" in response.text
+
+def test_index_html_has_status_and_error_divs(client: TestClient):
+    """
+    Test that the index.html file contains the status and error divs.
+    """
+    response = client.get("/static/index.html")
+    assert response.status_code == 200
+    assert "<div id=\"scanStatus\"></div>" in response.text
+    assert "<div id=\"errorMessage\" class=\"error\"></div>" in response.text

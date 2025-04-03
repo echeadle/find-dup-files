@@ -4,6 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Duplicate File Finder</title>
+    <style>
+        table {
+            width: 80%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+        .error {
+            color: red;
+        }
+    </style>
 </head>
 <body>
     <h1>Duplicate File Finder</h1>
@@ -14,12 +29,33 @@
         <button type="submit">Start Scan</button>
     </form>
 
+    <div id="scanStatus"></div>
+    <div id="errorMessage" class="error"></div>
+
+    <h2>Duplicate Files</h2>
+    <table id="duplicatesTable">
+        <thead>
+            <tr>
+                <th>Hash</th>
+                <th>File Path</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Duplicate file data will be inserted here -->
+        </tbody>
+    </table>
+
     <script>
         const form = document.getElementById('scanForm');
+        const scanStatus = document.getElementById('scanStatus');
+        const errorMessage = document.getElementById('errorMessage');
+
         form.addEventListener('submit', (event) => {
             event.preventDefault(); // Prevent default form submission
 
             const directory = document.getElementById('directory').value;
+            scanStatus.textContent = 'Scanning...';
+            errorMessage.textContent = '';
 
             fetch('/scan', {
                 method: 'POST',
@@ -32,16 +68,55 @@
                 if (response.ok) {
                     return response.json();
                 } else {
-                    throw new Error('Scan failed.');
+                    return response.json().then(errorData => {
+                        throw new Error(errorData.detail || 'Scan failed.');
+                    });
                 }
             })
             .then(data => {
-                alert(data.message); // Show success message
+                scanStatus.textContent = data.message; // Show success message
+                fetchDuplicates(); // Fetch and display duplicates after scan
             })
             .catch(error => {
-                alert(error.message); // Show error message
+                errorMessage.textContent = error.message; // Show error message
+                scanStatus.textContent = '';
             });
         });
+
+        function fetchDuplicates() {
+            fetch('/duplicates')
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error('Failed to fetch duplicates.');
+                }
+            })
+            .then(duplicateGroups => {
+                const tableBody = document.querySelector('#duplicatesTable tbody');
+                tableBody.innerHTML = ''; // Clear existing table rows
+
+                duplicateGroups.forEach(group => {
+                    group.forEach(file => {
+                        const row = tableBody.insertRow();
+                        const hashCell = row.insertCell();
+                        const pathCell = row.insertCell();
+                        hashCell.textContent = file.hash;
+                        pathCell.textContent = file.path;
+                    });
+                    const separatorRow = tableBody.insertRow();
+                    const separatorCell = separatorRow.insertCell();
+                    separatorCell.colSpan = 2;
+                    separatorCell.innerHTML = "<hr>";
+                });
+            })
+            .catch(error => {
+                errorMessage.textContent = error.message;
+            });
+        }
+
+        // Fetch duplicates on page load
+        fetchDuplicates();
     </script>
 </body>
 </html>
