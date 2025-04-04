@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duplicate File Finder</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <h1>Duplicate File Finder</h1>
+
+    <form id="scan-form">
+        <label for="directory">Directory to Scan:</label>
+        <input type="text" id="directory" name="directory" required>
+        <button type="submit">Scan</button>
+    </form>
+
+    <div id="status"></div>
+    <div id="error"></div>
+
+    <h2>Duplicate Files</h2>
+    <table id="duplicates-table">
+        <thead>
+            <tr>
+                <th>File Path</th>
+                <th>Size</th>
+                <th>Hash</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Duplicate file entries will be added here -->
+        </tbody>
+    </table>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

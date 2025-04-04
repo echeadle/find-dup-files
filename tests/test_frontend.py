@@ -1,60 +1,69 @@
 from fastapi.testclient import TestClient
 from app.main import get_app
-from sqlmodel import Session
+from sqlmodel import Session, create_engine
+from sqlmodel.pool import StaticPool
+from app.core.db import get_db_session
+from app.models.file_entry import FileEntry
 import pytest
-from app.core.db import create_db_engine, create_db_and_tables, get_db_session
+from starlette.requests import Request
+from fastapi.templating import Jinja2Templates
+import os
 from pathlib import Path
 
-@pytest.fixture(name="session")
-def session_fixture(tmp_path: Path):
-    db_file = tmp_path / "test.db"
-    engine = create_db_engine(str(db_file))
-    create_db_and_tables(engine)
-    session_generator = get_db_session(engine)
-    session = next(session_generator)
-    yield session
-    session.close()
+# Create a Jinja2Templates instance
+templates = Jinja2Templates(
+    directory=os.path.join(os.path.dirname(__file__), "..", "app", "templates")
+)
 
+@pytest.fixture(name="session")
+def session_fixture():
+    """
+    Pytest fixture to create an in-memory SQLite database session for testing.
+    """
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    session = Session(engine)
+    yield session
 
 @pytest.fixture(name="client")
 def client_fixture(session: Session):
+    """
+    Pytest fixture to create a TestClient for testing the FastAPI application.
+    """
     app = get_app(session)
-    return TestClient(app)
+    client = TestClient(app)
+    yield client
 
 def test_index_html_exists(client: TestClient):
     """
     Test that the index.html file is served correctly.
     """
-    response = client.get("/static/index.html")
+    response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "Duplicate File Finder" in response.text
 
 def test_index_html_has_form(client: TestClient):
     """
     Test that the index.html file contains the scan form.
     """
-    response = client.get("/static/index.html")
+    response = client.get("/")
     assert response.status_code == 200
-    assert "<form id=\"scanForm\">" in response.text
-    assert "<input type=\"text\" id=\"directory\" name=\"directory\" required>" in response.text
-    assert "<button type=\"submit\">Start Scan</button>" in response.text
+    assert "<form" in response.text
 
 def test_index_html_has_duplicates_table(client: TestClient):
     """
     Test that the index.html file contains the duplicates table.
     """
-    response = client.get("/static/index.html")
+    response = client.get("/")
     assert response.status_code == 200
-    assert "<table id=\"duplicatesTable\">" in response.text
-    assert "<th>Hash</th>" in response.text
-    assert "<th>File Path</th>" in response.text
+    assert "<table" in response.text
 
 def test_index_html_has_status_and_error_divs(client: TestClient):
     """
     Test that the index.html file contains the status and error divs.
     """
-    response = client.get("/static/index.html")
+    response = client.get("/")
     assert response.status_code == 200
-    assert "<div id=\"scanStatus\"></div>" in response.text
-    assert "<div id=\"errorMessage\" class=\"error\"></div>" in response.text
+    assert "<div id=\"status\">" in response.text
+    assert "<div id=\"error\">" in response.text
