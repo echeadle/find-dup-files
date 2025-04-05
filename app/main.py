@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.api import routes
 from app.core.db import create_db_engine, create_db_and_tables, get_db_session
-from sqlmodel import Session
+from sqlalchemy.orm import Session
 from pathlib import Path
 from fastapi.responses import HTMLResponse
 import os

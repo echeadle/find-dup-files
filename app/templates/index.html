@@ -10,12 +10,13 @@
 <body>
     <h1>Duplicate File Finder</h1>
 
-    <form id="scan-form">
+
+    <form id="scan-form" action="/api/scan" method="POST">
         <label for="directory">Directory to Scan:</label>
-        <input type="text" id="directory" name="directory" required>
+        <input type="text" id="directory" name="directory" placeholder="Enter directory" />
         <button type="submit">Scan</button>
     </form>
-
+    
     <div id="status"></div>
     <div id="error"></div>
 
