@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
-from sqlmodel import Session, select
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 from app.core.db import create_db_engine, create_db_and_tables, get_db_session
 from app.core.scanner import hash_file, store_file_entry
 from app.models.file_entry import FileEntry
@@ -69,7 +70,7 @@ def test_store_file_entry(tmp_path: Path):
 
     # Retrieve the file entry from the database
     statement = select(FileEntry).where(FileEntry.path == str(file_path))
-    db_file_entry = session.exec(statement).first()
+    db_file_entry = session.execute(statement).scalar_one_or_none()
 
     # Assert that the file entry was stored correctly
     assert db_file_entry is not None

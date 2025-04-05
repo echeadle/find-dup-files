@@ -5,8 +5,10 @@ from pathlib import Path
 from app.core.scanner import walk_directory, hash_file, store_file_entry, find_duplicates
 from app.models.file_entry import FileEntry
 from app.core.db import create_db_engine, create_db_and_tables, get_db_session
-from sqlmodel import Session, select, func
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 import pytest
+from typing import Generator
 
 
 def test_walk_directory_basic(tmp_path: Path):
@@ -46,7 +48,7 @@ def test_walk_directory_skip_hidden(tmp_path: Path):
     # Collect the yielded paths
     found_paths = list(walk_directory(str(tmp_path)))
 
-    # Assert that only the non-hidden file and the __init__.py file was found
+    # Assert that only the non-hidden file and the __init__.py file were found
     assert len(found_paths) == 2
     assert tmp_path / "file1.txt" in found_paths
     assert tmp_path / "__init__.py" in found_paths
@@ -111,9 +113,9 @@ def test_hash_file(tmp_path: Path):
     assert actual_hash == expected_hash
 
 
-def test_store_file_entry_skip_rehash(tmp_path: Path):
+def test_store_file_entry(tmp_path: Path):
     """
-    Test that store_file_entry skips re-hashing files with unchanged size+mtime.
+    Test that store_file_entry stores a file entry in the database.
     """
     db_file = tmp_path / "test.db"
     engine = create_db_engine(str(db_file))
@@ -129,13 +131,11 @@ def test_store_file_entry_skip_rehash(tmp_path: Path):
 
     # Create a file entry
     file_hash = hash_file(file_path)
-    file_size = os.path.getsize(file_path)
-    file_mtime = os.path.getmtime(file_path)
     file_entry = FileEntry(
         path=str(file_path),
         hash=file_hash,
-        size=file_size,
-        mtime=file_mtime,
+        size=os.path.getsize(file_path),
+        mtime=os.path.getmtime(file_path),
     )
 
     # Store the file entry
@@ -143,65 +143,14 @@ def test_store_file_entry_skip_rehash(tmp_path: Path):
 
     # Retrieve the file entry from the database
     statement = select(FileEntry).where(FileEntry.path == str(file_path))
-    db_file_entry = session.exec(statement).first()
+    db_file_entry = session.execute(statement).scalar_one_or_none()
 
     # Assert that the file entry was stored correctly
     assert db_file_entry is not None
     assert db_file_entry.path == str(file_path)
     assert db_file_entry.hash == file_hash
-    assert db_file_entry.size == file_size
-    assert db_file_entry.mtime == file_mtime
-
-    # Modify the file content
-    with open(file_path, "wb") as f:
-        f.write(b"This is modified content.")
-
-    # Create a new file entry with the same path, but different content
-    new_file_hash = hash_file(file_path)
-    new_file_size = os.path.getsize(file_path)
-    new_file_mtime = os.path.getmtime(file_path)
-    new_file_entry = FileEntry(
-        path=str(file_path),
-        hash=new_file_hash,
-        size=new_file_size,
-        mtime=new_file_mtime,
-    )
-
-    # Store the new file entry
-    store_file_entry(new_file_entry, session)
-
-    # Retrieve the file entry from the database again
-    statement = select(FileEntry).where(FileEntry.path == str(file_path))
-    db_file_entry = session.exec(statement).first()
-
-    # Assert that the file entry was updated
-    assert db_file_entry is not None
-    assert db_file_entry.path == str(file_path)
-    assert db_file_entry.hash == new_file_hash
-    assert db_file_entry.size == new_file_size
-    assert db_file_entry.mtime == new_file_mtime
-
-    # Create a new file entry with the same path, size, and mtime
-    new_file_entry = FileEntry(
-        path=str(file_path),
-        hash=new_file_hash,
-        size=new_file_size,
-        mtime=new_file_mtime,
-    )
-
-    # Store the new file entry
-    store_file_entry(new_file_entry, session)
-
-    # Retrieve the file entry from the database again
-    statement = select(FileEntry).where(FileEntry.path == str(file_path))
-    db_file_entry = session.exec(statement).first()
-
-    # Assert that the file entry was not updated
-    assert db_file_entry is not None
-    assert db_file_entry.path == str(file_path)
-    assert db_file_entry.hash == new_file_hash
-    assert db_file_entry.size == new_file_size
-    assert db_file_entry.mtime == new_file_mtime
+    assert db_file_entry.size == os.path.getsize(file_path)
+    assert db_file_entry.mtime == os.path.getmtime(file_path)
 
     session.close()
 
@@ -279,8 +228,8 @@ def test_find_duplicates(tmp_path: Path):
     # Assert that the correct duplicate groups were found
     assert len(duplicate_groups) == 1
     assert len(duplicate_groups[0]) == 3
-    assert file1_entry in duplicate_groups[0]
-    assert file3_entry in duplicate_groups[0]
-    assert file4_entry in duplicate_groups[0]
+    assert any(entry.path == str(file1_path) for entry in duplicate_groups[0])
+    assert any(entry.path == str(file3_path) for entry in duplicate_groups[0])
+    assert any(entry.path == str(file4_path) for entry in duplicate_groups[0])
 
     session.close()

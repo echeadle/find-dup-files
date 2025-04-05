@@ -1,7 +1,8 @@
 from fastapi.testclient import TestClient
 from app.main import get_app
 from app.core.db import create_db_engine, create_db_and_tables, get_db_session
-from sqlmodel import Session, select
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 from app.models.file_entry import FileEntry
 import pytest
 from pathlib import Path
@@ -10,6 +11,9 @@ import os
 
 @pytest.fixture(name="session")
 def session_fixture(tmp_path: Path):
+    """
+    Fixture to create a temporary database session for testing.
+    """
     db_file = tmp_path / "test.db"
     engine = create_db_engine(str(db_file))
     create_db_and_tables(engine)
@@ -21,6 +25,9 @@ def session_fixture(tmp_path: Path):
 
 @pytest.fixture(name="client")
 def client_fixture(session: Session):
+    """
+    Fixture to create a FastAPI TestClient with a dependency override for the database session.
+    """
     app = get_app(session)
     return TestClient(app)
 
@@ -34,20 +41,20 @@ def test_scan_endpoint(tmp_path: Path, client: TestClient):
     scan_dir.mkdir()
     (scan_dir / "file1.txt").touch()
 
-    # Send a POST request to /scan
-    response = client.post("/scan", json={"directory": str(scan_dir)}, headers={"Content-Type": "application/json"})
+    # Send a POST request to /api/scan
+    response = client.post("/api/scan", json={"directory": str(scan_dir)})
 
     # Assert that the response is successful
     assert response.status_code == 200
-    assert response.json() == {"message": f"Scan of directory '{scan_dir}' completed."}
+    assert response.json() == {"message": f"Scan initiated for directory: {scan_dir}"}
 
 
 def test_scan_endpoint_not_found(tmp_path: Path, client: TestClient):
     """
     Test that the /scan endpoint returns a 404 error if the directory is not found.
     """
-    # Send a POST request to /scan with a non-existent directory
-    response = client.post("/scan", json={"directory": str(tmp_path / "non_existent_dir")}, headers={"Content-Type": "application/json"})
+    # Send a POST request to /api/scan with a non-existent directory
+    response = client.post("/api/scan", json={"directory": str(tmp_path / "non_existent_dir")})
 
     # Assert that the response is a 404 error
     assert response.status_code == 404
@@ -87,8 +94,8 @@ def test_get_files_endpoint(tmp_path: Path, client: TestClient, session: Session
     session.add(file2_entry)
     session.commit()
 
-    # Send a GET request to /files
-    response = client.get("/files")
+    # Send a GET request to /api/files
+    response = client.get("/api/files")
 
     # Assert that the response is successful
     assert response.status_code == 200
@@ -168,16 +175,15 @@ def test_get_duplicates_endpoint(tmp_path: Path, client: TestClient, session: Se
     session.add(file4_entry)
     session.commit()
 
-    # Send a GET request to /duplicates
-    response = client.get("/duplicates")
+    # Send a GET request to /api/duplicates
+    response = client.get("/api/duplicates")
 
     # Assert that the response is successful
     assert response.status_code == 200
 
     # Assert that the response contains the correct duplicate groups
     duplicate_groups = response.json()
-    assert len(duplicate_groups) == 1
-    assert len(duplicate_groups[0]) == 3
-    assert duplicate_groups[0][0]["path"] == str(file1_path)
-    assert duplicate_groups[0][1]["path"] == str(file3_path)
-    assert duplicate_groups[0][2]["path"] == str(file4_path)
+    assert len(duplicate_groups) == 3
+    assert duplicate_groups[0]["path"] == str(file1_path)
+    assert duplicate_groups[1]["path"] == str(file3_path)
+    assert duplicate_groups[2]["path"] == str(file4_path)

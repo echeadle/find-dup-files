@@ -4,7 +4,7 @@ from app.core.db import get_db_session
 from app.core.scanner import scan_directory
 from pydantic import BaseModel
 from pathlib import Path
-from sqlalchemy import func # Import func from sqlalchemy
+from sqlalchemy import func
 
 # Create an APIRouter instance to handle API routes.
 router = APIRouter()
@@ -34,7 +34,7 @@ async def scan(scan_request: ScanRequest, db: Session = Depends(get_db_session))
 
     # Check if the provided path is a valid directory.
     if not directory_path.is_dir():
-        raise HTTPException(status_code=400, detail="Invalid directory path")
+        raise HTTPException(status_code=404, detail=f"Directory '{directory_path}' not found.")
 
     try:
         # Call the scan_directory function to perform the scan.
@@ -75,5 +75,14 @@ async def get_duplicates(db: Session = Depends(get_db_session)):
     """
     from app.models.file_entry import FileEntry
     # Query the database for FileEntry objects with duplicate hashes.
-    duplicates = db.query(FileEntry).group_by(FileEntry.hash).having(func.count(FileEntry.hash) > 1).all()
-    return duplicates
+    duplicate_groups = []
+    duplicate_hashes = db.query(FileEntry.hash).group_by(FileEntry.hash).having(func.count(FileEntry.hash) > 1).all()
+    duplicate_hashes = [hash[0] for hash in duplicate_hashes]
+    for hash in duplicate_hashes:
+        duplicate_groups.append(db.query(FileEntry).filter_by(hash=hash).all())
+    
+    duplicate_list = []
+    for group in duplicate_groups:
+        for item in group:
+            duplicate_list.append(item)
+    return duplicate_list
