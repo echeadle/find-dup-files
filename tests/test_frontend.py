@@ -1,11 +1,11 @@
 from fastapi.testclient import TestClient
 from app.main import get_app
-from sqlmodel import Session, create_engine
-from sqlmodel.pool import StaticPool
-from app.core.db import get_db_session
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+from app.core.db import create_db_and_tables
 from app.models.file_entry import FileEntry
 import pytest
-from starlette.requests import Request
 from fastapi.templating import Jinja2Templates
 import os
 from pathlib import Path
@@ -23,8 +23,12 @@ def session_fixture():
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
-    session = Session(engine)
+    create_db_and_tables(engine)  # Create tables in the in-memory database
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
     yield session
+    session.close()
+
 
 @pytest.fixture(name="client")
 def client_fixture(session: Session):
@@ -35,6 +39,7 @@ def client_fixture(session: Session):
     client = TestClient(app)
     yield client
 
+
 def test_index_html_exists(client: TestClient):
     """
     Test that the index.html file is served correctly.
@@ -42,6 +47,7 @@ def test_index_html_exists(client: TestClient):
     response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
+
 
 def test_index_html_has_form(client: TestClient):
     """
@@ -51,6 +57,7 @@ def test_index_html_has_form(client: TestClient):
     assert response.status_code == 200
     assert "<form" in response.text
 
+
 def test_index_html_has_duplicates_table(client: TestClient):
     """
     Test that the index.html file contains the duplicates table.
@@ -58,6 +65,7 @@ def test_index_html_has_duplicates_table(client: TestClient):
     response = client.get("/")
     assert response.status_code == 200
     assert "<table" in response.text
+
 
 def test_index_html_has_status_and_error_divs(client: TestClient):
     """
