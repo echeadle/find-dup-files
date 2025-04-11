@@ -1,19 +1,13 @@
 from fastapi.testclient import TestClient
-from app.main import get_app
+from app.main import get_app, templates
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from app.core.db import create_db_and_tables
 from app.models.file_entry import FileEntry
 import pytest
-from fastapi.templating import Jinja2Templates
 import os
 from pathlib import Path
-
-# Create a Jinja2Templates instance
-templates = Jinja2Templates(
-    directory=os.path.join(os.path.dirname(__file__), "..", "app", "templates")
-)
 
 @pytest.fixture(name="session")
 def session_fixture():

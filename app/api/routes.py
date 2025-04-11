@@ -5,6 +5,7 @@ from app.core.scanner import scan_directory
 from pydantic import BaseModel
 from pathlib import Path
 from sqlalchemy import func
+from app.core.config import read_config, update_config
 
 # Create an APIRouter instance to handle API routes.
 router = APIRouter()
@@ -12,6 +13,10 @@ router = APIRouter()
 # Define a Pydantic model for the scan request payload.
 class ScanRequest(BaseModel):
     directory: str
+
+# Define a Pydantic model for the config request payload.
+class ConfigRequest(BaseModel):
+    excluded_directories: list[str]
 
 # Define the POST /scan endpoint.
 @router.post("/scan")
@@ -39,7 +44,7 @@ async def scan(scan_request: ScanRequest, db: Session = Depends(get_db_session))
     try:
         # Call the scan_directory function to perform the scan.
         scan_directory(directory_path, db)
-        return {"message": f"Scan initiated for directory: {scan_request.directory}"}
+        return {"message": f"Scan of directory '{scan_request.directory}' completed."}
     except Exception as e:
         # Raise an HTTPException if the scan fails.
         raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
@@ -84,5 +89,22 @@ async def get_duplicates(db: Session = Depends(get_db_session)):
     duplicate_list = []
     for group in duplicate_groups:
         for item in group:
-            duplicate_list.append(item)
+            duplicate_list.append({"path": item.path})
     return duplicate_list
+
+# Define the GET /config endpoint.
+@router.get("/config")
+async def get_config():
+    """
+    Returns the current configuration.
+    """
+    return read_config()
+
+# Define the PUT /config endpoint.
+@router.put("/config")
+async def update_config_endpoint(config_request: ConfigRequest):
+    """
+    Updates the configuration.
+    """
+    update_config(config_request.model_dump())
+    return {"message": "Configuration updated successfully."}

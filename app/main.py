@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.api import routes
@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 from fastapi.responses import HTMLResponse
 import os
+
+# Set up templates
+templates_path = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=templates_path)
 
 def get_app(session: Session = None):
     """
@@ -35,16 +39,25 @@ def get_app(session: Session = None):
     static_path = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=static_path), name="static")
 
-    # Set up templates
-    templates_path = Path(__file__).parent / "templates"
-    templates = Jinja2Templates(directory=templates_path)
-
     @app.get("/", response_class=HTMLResponse)
     async def read_root(request: Request, db: Session = Depends(get_db_session)):
         """
         Serves the main HTML page.
         """
-        return templates.TemplateResponse(request, "index.html", {"data": {}})
+        try:
+            return templates.TemplateResponse(request, "index.html", {"data": {}})
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error rendering template: {str(e)}")
+
+    @app.get("/config", response_class=HTMLResponse)
+    async def read_config(request: Request, db: Session = Depends(get_db_session)):
+        """
+        Serves the config HTML page.
+        """
+        try:
+            return templates.TemplateResponse(request, "index.html", {"data": {}})
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error rendering template: {str(e)}")
 
     return app
 

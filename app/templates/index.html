@@ -5,35 +5,137 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Duplicate File Finder</title>
     <link rel="stylesheet" href="/static/style.css">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
 </head>
 <body>
-    <h1>Duplicate File Finder</h1>
+    <div class="sidebar">
+        <h2>Navigation</h2>
+        <ul>
+            <li><a href="/">🏠 Home</a></li>
+            <!-- Placeholder links - functionality not yet implemented -->
+            <!-- <li><a href="/config/excludes">📁❌ Edit Excluded Directories</a></li> -->
+            <!-- <li><a href="/config/filetypes">📄 Edit File Types</a></li> -->
+        </ul>
+    </div>
+
+    <div class="main-content">
+        <h1>Duplicate File Viewer</h1>
+
+        <label for="scanDir">Directory to Scan:</label>
+        <input type="text" id="scanDir" placeholder="/path/to/your/files" />
+        <button id="scanBtn">Scan Directory</button>
+
+        <div id="statusMessage">Status: Ready. Enter a directory path and click Scan.</div>
+
+        <div class="results" id="resultsContainer">
+            <h2>Scan Results</h2>
+            <!-- Duplicate groups will be loaded here by JavaScript -->
+            <p>No duplicates found yet. Run a scan to see results.</p>
+        </div>
+    </div>
+
+    <script>
+        const scanDirInput = document.getElementById('scanDir');
+        const scanBtn = document.getElementById('scanBtn');
+        const statusMessageDiv = document.getElementById('statusMessage');
+        const resultsContainer = document.getElementById('resultsContainer');
+
+        // Function to fetch and display duplicates
+        async function fetchDuplicates() {
+            statusMessageDiv.textContent = 'Status: Fetching duplicates...';
+            resultsContainer.innerHTML = '<h2>Scan Results</h2><p>Loading...</p>'; // Clear previous results
+
+            try {
+                const response = await fetch('/duplicates');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const duplicatesData = await response.json();
+
+                resultsContainer.innerHTML = '<h2>Scan Results</h2>'; // Clear loading message
+
+                if (Object.keys(duplicatesData).length === 0) {
+                    resultsContainer.innerHTML += '<p>No duplicate files found in the database.</p>';
+                } else {
+                    for (const hash in duplicatesData) {
+                        const files = duplicatesData[hash];
+                        if (files.length > 1) { // Only show groups with actual duplicates
+                            const groupDiv = document.createElement('div');
+                            groupDiv.className = 'dup-group';
+
+                            const title = document.createElement('h4');
+                            title.innerHTML = `Duplicate Group (Hash: <code>${hash.substring(0, 12)}...</code>)`; // Show partial hash
+                            groupDiv.appendChild(title);
+
+                            const fileList = document.createElement('ul');
+                            files.forEach(filePath => {
+                                const listItem = document.createElement('li');
+                                listItem.textContent = filePath;
+                                fileList.appendChild(listItem);
+                            });
+                            groupDiv.appendChild(fileList);
+                            resultsContainer.appendChild(groupDiv);
+                        }
+                    }
+                     // Check again if any groups were actually added
+                    if (resultsContainer.querySelectorAll('.dup-group').length === 0) {
+                         resultsContainer.innerHTML += '<p>No duplicate files found in the database.</p>';
+                    }
+                }
+                statusMessageDiv.textContent = 'Status: Duplicates loaded successfully.';
+
+            } catch (error) {
+                console.error('Error fetching duplicates:', error);
+                statusMessageDiv.textContent = `Status: Error fetching duplicates - ${error.message}`;
+                resultsContainer.innerHTML = '<h2>Scan Results</h2><p>Could not load duplicate results.</p>';
+            }
+        }
+
+        // Event listener for the scan button
+        scanBtn.addEventListener('click', async () => {
+            const directoryPath = scanDirInput.value.trim();
+            if (!directoryPath) {
+                statusMessageDiv.textContent = 'Status: Please enter a directory path.';
+                return;
+            }
+
+            statusMessageDiv.textContent = `Status: Starting scan for "${directoryPath}"...`;
+            scanBtn.disabled = true; // Disable button during scan
+            resultsContainer.innerHTML = '<h2>Scan Results</h2><p>Scan in progress...</p>'; // Clear previous results
 
 
-    <form id="scan-form" action="/api/scan" method="POST">
-        <label for="directory">Directory to Scan:</label>
-        <input type="text" id="directory" name="directory" placeholder="Enter directory" />
-        <button type="submit">Scan</button>
-    </form>
-    
-    <div id="status"></div>
-    <div id="error"></div>
+            try {
+                const response = await fetch('/scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ directory_path: directoryPath }),
+                });
 
-    <h2>Duplicate Files</h2>
-    <table id="duplicates-table">
-        <thead>
-            <tr>
-                <th>File Path</th>
-                <th>Size</th>
-                <th>Hash</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- Duplicate file entries will be added here -->
-        </tbody>
-    </table>
+                const result = await response.json(); // Always try to parse JSON
 
-    <script src="/static/script.js"></script>
+                if (!response.ok) {
+                     // Try to get more specific error from backend response
+                    const errorMsg = result.detail || `HTTP error! status: ${response.status}`;
+                    throw new Error(errorMsg);
+                }
+
+                statusMessageDiv.textContent = `Status: ${result.message || 'Scan initiated...'}. Fetching results...`;
+                // After scan is initiated (or completed, depending on API design), fetch the duplicates.
+                await fetchDuplicates();
+
+            } catch (error) {
+                console.error('Error starting scan:', error);
+                statusMessageDiv.textContent = `Status: Error starting scan - ${error.message}`;
+                 resultsContainer.innerHTML = '<h2>Scan Results</h2><p>Scan failed to start or complete.</p>';
+            } finally {
+                 scanBtn.disabled = false; // Re-enable button
+            }
+        });
+
+        // Initial load of duplicates when the page loads
+        document.addEventListener('DOMContentLoaded', fetchDuplicates);
+
+    </script>
 </body>
 </html>
