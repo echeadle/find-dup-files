@@ -1,110 +1,101 @@
-from fastapi import APIRouter, Depends, HTTPException
+# /home/echeadle/15_DupFiles/find-dup-files/app/api/routes.py
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from app.core.db import get_db_session
-from app.core.scanner import scan_directory
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict # Import ConfigDict
 from pathlib import Path
-from sqlalchemy import func
-from app.core.config import read_config, update_config
+from typing import List, Dict
 
-# Create an APIRouter instance to handle API routes.
+# Updated imports
+from app.core.db import get_db_session
+from app.core.scanner import scan_directory, find_duplicates # Import find_duplicates from scanner
+from app.models.file_entry import FileEntry as DBFileEntry # Rename to avoid conflict
+
 router = APIRouter()
 
-# Define a Pydantic model for the scan request payload.
 class ScanRequest(BaseModel):
-    directory: str
+    """Request model for triggering a directory scan."""
+    directory_path: str = Field(..., description="The absolute path to the directory to scan.")
 
-# Define a Pydantic model for the config request payload.
-class ConfigRequest(BaseModel):
-    excluded_directories: list[str]
+class ScanResponse(BaseModel):
+    """Response model for the scan endpoint."""
+    message: str
 
-# Define the POST /scan endpoint.
-@router.post("/scan")
-async def scan(scan_request: ScanRequest, db: Session = Depends(get_db_session)):
+class FileEntry(BaseModel):
+    """Response model for a single file entry."""
+    id: int
+    path: str
+    hash: str
+    size: int
+    mtime: float
+
+    # Use ConfigDict for Pydantic V2 compatibility
+    model_config = ConfigDict(from_attributes=True)
+
+
+@router.post("/api/scan", response_model=ScanResponse, status_code=200)
+async def trigger_scan(
+    scan_request: ScanRequest,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_db_session)
+):
     """
-    Triggers a scan of the specified directory.
+    Triggers a background scan of the specified directory.
 
     Args:
-        scan_request (ScanRequest): The request body containing the directory to scan.
-        db (Session): The database session.
+        scan_request (ScanRequest): The request body containing the directory path.
+        background_tasks (BackgroundTasks): FastAPI background task manager.
+        session (Session): Database session dependency.
 
     Returns:
-        dict: A message indicating the scan has been initiated.
+        ScanResponse: A message indicating the scan has started or completed.
 
     Raises:
-        HTTPException: If the directory path is invalid or the scan fails.
+        HTTPException: 404 if the directory is not found.
     """
-    # Convert the directory string to a Path object.
-    directory_path = Path(scan_request.directory)
+    scan_path = Path(scan_request.directory_path)
+    if not scan_path.is_dir():
+        raise HTTPException(status_code=404, detail=f"Directory not found: {scan_path}")
 
-    # Check if the provided path is a valid directory.
-    if not directory_path.is_dir():
-        raise HTTPException(status_code=404, detail=f"Directory '{directory_path}' not found.")
-
+    # Run the scan synchronously for simplicity in this version
+    # For long scans, background_tasks.add_task(scan_directory, scan_path, session) is better
     try:
-        # Call the scan_directory function to perform the scan.
-        scan_directory(directory_path, db)
-        return {"message": f"Scan of directory '{scan_request.directory}' completed."}
+        # Correct argument order
+        scan_directory(scan_path, session)
+        return ScanResponse(message=f"Scan of directory '{scan_path}' completed.")
     except Exception as e:
-        # Raise an HTTPException if the scan fails.
-        raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
+        # Log the exception e
+        print(f"Error during scan: {e}") # Basic logging
+        raise HTTPException(status_code=500, detail=f"An error occurred during the scan: {str(e)}")
 
-# Define the GET /files endpoint.
-@router.get("/files")
-async def get_files(db: Session = Depends(get_db_session)):
+
+@router.get("/api/files", response_model=List[FileEntry])
+async def get_all_files(session: Session = Depends(get_db_session)):
     """
-    Returns a list of all scanned files.
+    Retrieves a list of all files currently stored in the database.
 
     Args:
-        db (Session): The database session.
+        session (Session): Database session dependency.
 
     Returns:
-        list: A list of FileEntry objects representing the scanned files.
+        List[FileEntry]: A list of file entries.
     """
-    from app.models.file_entry import FileEntry
-    # Query the database for all FileEntry objects.
-    files = db.query(FileEntry).all()
+    files = session.query(DBFileEntry).all()
     return files
 
-# Define the GET /duplicates endpoint.
-@router.get("/duplicates")
-async def get_duplicates(db: Session = Depends(get_db_session)):
+
+@router.get("/api/duplicates", response_model=Dict[str, List[str]])
+async def get_duplicates(session: Session = Depends(get_db_session)):
     """
-    Returns a list of duplicate file groups.
+    Retrieves a dictionary of duplicate files, grouped by hash.
 
     Args:
-        db (Session): The database session.
+        session (Session): Database session dependency.
 
     Returns:
-        list: A list of FileEntry objects representing the duplicate files.
+        Dict[str, List[str]]: A dictionary where keys are file hashes
+                               and values are lists of paths for duplicate files.
     """
-    from app.models.file_entry import FileEntry
-    # Query the database for FileEntry objects with duplicate hashes.
-    duplicate_groups = []
-    duplicate_hashes = db.query(FileEntry.hash).group_by(FileEntry.hash).having(func.count(FileEntry.hash) > 1).all()
-    duplicate_hashes = [hash[0] for hash in duplicate_hashes]
-    for hash in duplicate_hashes:
-        duplicate_groups.append(db.query(FileEntry).filter_by(hash=hash).all())
-    
-    duplicate_list = []
-    for group in duplicate_groups:
-        for item in group:
-            duplicate_list.append({"path": item.path})
-    return duplicate_list
+    # Call the find_duplicates function imported from scanner.py
+    duplicates = find_duplicates(session)
+    return duplicates
 
-# Define the GET /config endpoint.
-@router.get("/config")
-async def get_config():
-    """
-    Returns the current configuration.
-    """
-    return read_config()
-
-# Define the PUT /config endpoint.
-@router.put("/config")
-async def update_config_endpoint(config_request: ConfigRequest):
-    """
-    Updates the configuration.
-    """
-    update_config(config_request.model_dump())
-    return {"message": "Configuration updated successfully."}

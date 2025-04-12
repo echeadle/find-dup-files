@@ -1,95 +1,41 @@
+# /home/echeadle/15_DupFiles/find-dup-files/app/core/scanner.py
+from pathlib import Path  # <-- Import Path here
+from sqlalchemy.orm import Session
+from sqlalchemy import select, func
+from app.models.file_entry import FileEntry
+from typing import Generator, Dict, List
 import os
 import hashlib
-from pathlib import Path
-from sqlalchemy.orm import Session
-from app.models.file_entry import FileEntry
-import time
-from sqlalchemy import select, func
-from typing import Generator
 import json
 
+# Function to hash files (assuming this exists or needs to be added)
 def hash_file(file_path: Path) -> str:
     """
-    Hashes a file using SHA-256.
+    Computes the SHA-256 hash of a file.
 
     Args:
-        file_path (Path): The path to the file to hash.
+        file_path (Path): The path to the file.
 
     Returns:
-        str: The SHA-256 hash of the fil
+        str: The hexadecimal SHA-256 hash of the file content.
+
+    Raises:
+        OSError: If the file cannot be read.
     """
-    # Create a SHA-256 hash object.
     hasher = hashlib.sha256()
-    # Open the file in binary read mode.
-    with open(file_path, "rb") as file:
-        # Read the file in chunks to handle large files.
-        while True:
-            chunk = file.read(4096)
-            if not chunk:
-                break  # End of file.
-            # Update the hash with the current chunk.
-            hasher.update(chunk)
-    # Return the hexadecimal representation of the hash.
+    buffer_size = 65536  # Read in 64k chunks
+    try:
+        with open(file_path, 'rb') as file:
+            while True:
+                data = file.read(buffer_size)
+                if not data:
+                    break
+                hasher.update(data)
+    except OSError as e:
+        print(f"Error reading file {file_path} for hashing: {e}")
+        raise # Re-raise the exception to be caught by the caller
     return hasher.hexdigest()
 
-def store_file_entry(file_entry: FileEntry, session: Session):
-    """
-    Stores or updates a file entry in the database.
-
-    Args:
-        file_entry: The file entry to store or update.
-        session: The database session.
-    """
-    statement = select(FileEntry).where(FileEntry.path == file_entry.path)
-    db_file_entry = session.execute(statement).scalar_one_or_none()
-    if db_file_entry:
-        # Update the existing file entry if necessary
-        if db_file_entry.size != file_entry.size or db_file_entry.mtime != file_entry.mtime:
-            db_file_entry.hash = file_entry.hash
-            db_file_entry.size = file_entry.size
-            db_file_entry.mtime = file_entry.mtime
-            session.add(db_file_entry)
-    else:
-        # Add a new file entry
-        session.add(file_entry)
-    session.commit()
-
-def walk_directory(directory: str, config_file: str = None) -> Generator[Path, None, None]:
-    """
-    Recursively walks through a directory and yields the paths of all files found.
-
-    Args:
-        directory: The path to the directory to walk.
-        config_file: The path to the config file.
-
-    Yields:
-        Path: The path to each file found in the directory.
-    """
-    if not os.path.exists(directory):
-        raise FileNotFoundError(f"Directory '{directory}' not found.")
-
-    excluded_directories = []
-    if config_file:
-        with open(config_file, "r") as f:
-            config_data = json.load(f)
-            excluded_directories = config_data.get("excluded_directories", [])
-
-    for root, dirs, files in os.walk(directory):
-        # Skip hidden directories
-        dirs[:] = [d for d in dirs if not d.startswith(('.', '__'))]
-        # Skip excluded directories
-        dirs[:] = [d for d in dirs if d not in excluded_directories]
-
-        # Skip hidden files
-        files = [f for f in files if not f.startswith('.')]
-
-        for file in files:
-            file_path = Path(root) / file
-            if file_path.is_symlink():
-                continue  # Skip symlinks
-            if config_file and file_path == Path(config_file):
-                continue  # Skip the config file itself
-            yield file_path
 
 def scan_directory(directory: Path, db: Session):
     """
@@ -100,32 +46,144 @@ def scan_directory(directory: Path, db: Session):
         db (Session): The database session.
     """
     # Walk through the directory tree.
-    for file_path in walk_directory(directory):
+    for file_path in walk_directory(directory): # walk_directory now expects Path
         # Get file size and modification time.
-        file_size = file_path.stat().st_size
-        file_mtime = file_path.stat().st_mtime
+        try:
+            file_stat = file_path.stat() # Get stat result once
+            file_size = file_stat.st_size
+            file_mtime = file_stat.st_mtime
+        except OSError as e:
+            print(f"Warning: Could not stat file {file_path}: {e}")
+            continue # Skip this file if stat fails
+
+        # Check if file needs hashing based on DB entry
+        existing_entry = db.query(FileEntry).filter_by(path=str(file_path)).first()
+        if existing_entry and existing_entry.size == file_size and existing_entry.mtime == file_mtime:
+            # File hasn't changed, skip hashing
+            continue
+
         # Hash the file.
-        file_hash = hash_file(file_path)
+        try:
+            file_hash = hash_file(file_path)
+        except OSError as e:
+            print(f"Warning: Could not hash file {file_path}: {e}")
+            continue # Skip this file if hashing fails
 
-        # Create a new FileEntry.
-        file_entry = FileEntry(path=str(file_path), hash=file_hash, size=file_size, mtime=file_mtime)
+        # Create or update FileEntry.
+        if existing_entry:
+            existing_entry.hash = file_hash
+            existing_entry.size = file_size
+            existing_entry.mtime = file_mtime
+            entry_to_save = existing_entry
+        else:
+            entry_to_save = FileEntry(path=str(file_path), hash=file_hash, size=file_size, mtime=file_mtime)
+
         # Store or update the file entry in the database.
-        store_file_entry(file_entry, db)
+        try:
+            db.add(entry_to_save)
+            db.flush() # Flush changes within the loop
+        except Exception as e:
+            print(f"Error adding/flushing entry for {file_path}: {e}")
+            db.rollback() # Rollback if adding this specific entry fails
 
-def find_duplicates(db: Session):
+    try:
+        db.commit() # Commit all changes at the end of the scan
+    except Exception as e:
+        print(f"Error committing changes after scan: {e}")
+        db.rollback()
+
+
+def walk_directory(directory: Path, config_file: str = None) -> Generator[Path, None, None]:
     """
-    Finds and returns a list of duplicate file groups.
+    Recursively walks through a directory and yields the paths of all files found.
+
+    Args:
+        directory (Path): The path to the directory to walk.
+        config_file (str, optional): The path to the config file. Defaults to None.
+
+    Yields:
+        Path: The path to each file found in the directory.
+    """
+    # Reason: Ensure directory exists before proceeding.
+    if not directory.is_dir():
+        # Use FileNotFoundError for consistency with os.walk behavior if path doesn't exist
+        raise FileNotFoundError(f"Directory '{directory}' not found or is not a directory.")
+
+    excluded_directories = []
+    # Reason: Load exclusion config only if specified and exists.
+    config_path = Path(config_file) if config_file else None
+    if config_path and config_path.is_file():
+        try:
+            with open(config_path, "r") as f:
+                config_data = json.load(f)
+                # Reason: Safely get excluded_directories list, default to empty list if key missing.
+                excluded_directories = config_data.get("excluded_directories", [])
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"Warning: Could not load or parse config file {config_path}: {e}")
+            # Continue without exclusions if config fails to load
+
+    # Reason: Use os.walk for efficient directory traversal. Convert Path to string for os.walk.
+    for root, dirs, files in os.walk(str(directory)):
+        root_path = Path(root)
+        # Filter out directories to exclude from further traversal
+        # Reason: Modify dirs[:] in-place as required by os.walk API.
+        # Reason: Exclude common hidden/system directories and configured exclusions.
+        dirs[:] = [d for d in dirs if not d.startswith(('.', '__')) and d not in excluded_directories]
+
+        for file in files:
+            # Reason: Exclude common hidden files.
+            if file.startswith('.'):
+                continue
+
+            file_path = root_path / file
+
+            # Reason: Skip symbolic links as per requirements.
+            if file_path.is_symlink():
+                continue
+
+            # Reason: Avoid processing the configuration file itself if it's within the scanned directory.
+            if config_path and file_path == config_path:
+                continue
+
+            # Reason: Yield only valid file paths.
+            yield file_path
+
+
+def find_duplicates(db: Session) -> Dict[str, List[str]]:
+    """
+    Finds and returns a dictionary of duplicate file groups {hash: [paths]}.
 
     Args:
         db (Session): The database session.
 
     Returns:
-        list: A list of lists of FileEntry objects, where each inner list represents a group of duplicate files.
+        Dict[str, List[str]]: A dictionary where keys are file hashes
+                              and values are lists of paths for duplicate files.
+                              Only includes hashes that appear more than once.
     """
-    # Query the database for FileEntry objects with duplicate hashes.
-    duplicate_hashes = db.query(FileEntry.hash).group_by(FileEntry.hash).having(func.count(FileEntry.hash) > 1).all()
-    duplicate_hashes = [hash[0] for hash in duplicate_hashes]
-    duplicate_groups = []
-    for hash in duplicate_hashes:
-        duplicate_groups.append(db.query(FileEntry).filter_by(hash=hash).all())
-    return duplicate_groups
+    duplicates_dict = {}
+
+    # Step 1: Find hashes that appear more than once
+    # Reason: Subquery efficiently identifies hashes associated with more than one file.
+    subquery = (
+        select(FileEntry.hash)
+        .group_by(FileEntry.hash)
+        .having(func.count(FileEntry.id) > 1)
+        .subquery()
+    )
+
+    # Step 2: Select all file entries whose hash is in the subquery result
+    # Reason: Retrieve all FileEntry objects that are part of a duplicate group.
+    stmt = select(FileEntry).where(FileEntry.hash.in_(select(subquery.c.hash)))
+
+    # Reason: Execute the query and get all results.
+    duplicate_entries = db.execute(stmt).scalars().all()
+
+    # Step 3: Group the paths by hash
+    # Reason: Construct the required dictionary format {hash: [path1, path2, ...]}.
+    for entry in duplicate_entries:
+        if entry.hash not in duplicates_dict:
+            duplicates_dict[entry.hash] = []
+        duplicates_dict[entry.hash].append(entry.path)
+
+    return duplicates_dict
